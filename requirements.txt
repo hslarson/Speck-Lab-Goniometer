@@ -1,0 +1,3 @@
+matplotlib
+seabreeze
+zaber_motion
