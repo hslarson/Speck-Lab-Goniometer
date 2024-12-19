@@ -3,5 +3,4 @@
 venv/
 .vscode/
 __pycache__
-*.csv
-data
+data/
