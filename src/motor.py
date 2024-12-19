@@ -50,8 +50,8 @@ def init_axes(azimuth_axis: Axis, altitude_axis: Axis):
     """Initialize settings and home axes"""
 
     # Set axis limits
-    azimuth_axis.settings.set("limit.min", -5-ZABER_AZIMUTH_ANGLE_OFFSET, Units.ANGLE_DEGREES)
-    azimuth_axis.settings.set("limit.max", 90-ZABER_AZIMUTH_ANGLE_OFFSET, Units.ANGLE_DEGREES)
+    azimuth_axis.settings.set("limit.min", -90-ZABER_AZIMUTH_ANGLE_OFFSET, Units.ANGLE_DEGREES)
+    azimuth_axis.settings.set("limit.max",  90-ZABER_AZIMUTH_ANGLE_OFFSET, Units.ANGLE_DEGREES)
 
     altitude_axis.settings.set("limit.min", -90-ZABER_ALTITUDE_ANGLE_OFFSET, Units.ANGLE_DEGREES)
     altitude_axis.settings.set("limit.max",  90-ZABER_ALTITUDE_ANGLE_OFFSET, Units.ANGLE_DEGREES)
@@ -94,5 +94,7 @@ if __name__ == "__main__":
     az, alt = get_axes()
     init_axes(az, alt)
 
+    print("starting move")
     set_altitude(alt, 0)
+    print("done")
     set_azimuth(az, 45)
