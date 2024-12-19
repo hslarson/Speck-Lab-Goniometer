@@ -93,7 +93,3 @@ for alt in altitude_angles:
     ax.set_title(f"Spectrometer Reading ({alt:+5.2f}°)")
     plt.draw() # Redraw the plot
     plt.pause(0.01)
-
-
-plt.ioff()  # Turn off interactive mode
-plt.show()  # Keep the plot window open at the end
