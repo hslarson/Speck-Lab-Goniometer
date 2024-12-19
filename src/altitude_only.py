@@ -1,26 +1,27 @@
-from motor import *
-from spectrometer import *
-import numpy as np
-import csv
-from datetime import datetime
-import time
 import matplotlib.pyplot as plt
+from datetime import datetime
+from spectrometer import *
+from motor import *
+import numpy as np
+import time
+import csv
 
 
-# Angular sweep parameters
-AZIMUTH_START = 0
-AZIMUTH_END = 90
-AZIMUTH_STEP = 1
-azimuth_angles = np.arange(AZIMUTH_START, AZIMUTH_END+AZIMUTH_STEP, AZIMUTH_STEP)
+# === Angular sweep parameters ===
+# -90 is arm horizontal left. +90 is arm horizontal right
+ALTITUDE_START = -80 # Starting angle (degrees) of sweep.
+ALTITUDE_END = 80 # Final angle (degrees) of sweep
+ALTITUDE_STEP = 0.2 # Degrees between each measurement
 
-ALTITUDE_START = -80
-ALTITUDE_END = 80
-ALTITUDE_STEP = 0.2
+# === Spectrometer parameters ===
+INTEGRATION_TIME = 5000 # Integration time (microseconds)
+AVERAGING_POINTS = 128 # Number of readings to collect at each angle
+BOXCAR_WIDTH = 10 # Moving average filter width. 1 = No smoothing
+
+
+
+# Create array of altitude angles
 altitude_angles = np.arange(ALTITUDE_START, ALTITUDE_END+ALTITUDE_STEP, ALTITUDE_STEP)
-
-# Integration time (microseconds)
-INTEGRATION_TIME = 100000
-
 
 # Initialize motors
 azimuth_stage, altitude_stage = get_axes()
@@ -68,11 +69,18 @@ for alt in altitude_angles:
     print(f"Setting Altitude to {alt:+5.2f}°")
     set_altitude(altitude_stage, float(alt))
 
-    # Settling time
+    # Motion settling time
     time.sleep(1)
 
-    # Take new reading
-    reading = spec.intensities()
+    # Take new readings
+    reading = np.zeros(spec.pixels)
+    for _ in range(AVERAGING_POINTS):
+        reading += spec.intensities()
+
+    # Post-process data
+    reading /= AVERAGING_POINTS
+    kernel = np.ones(BOXCAR_WIDTH) / BOXCAR_WIDTH
+    reading = np.convolve(reading, kernel, mode='valid')
 
     # Save readings to csv
     with open(output_filename, mode='a', newline='') as f:
@@ -82,15 +90,9 @@ for alt in altitude_angles:
     # Show readings in figure
     line.set_data(wavelengths, reading)
     ax.set_title(f"Spectrometer Reading ({alt:+5.2f}°)")
-    plt.draw()  # Redraw the plot
+    plt.draw() # Redraw the plot
     plt.pause(0.01)
 
 
-# Move motor
-print(f"Setting Altitude to {ALTITUDE_START:+5.2f}°")
-set_altitude(altitude_stage, float(ALTITUDE_START))
-
 plt.ioff()  # Turn off interactive mode
 plt.show()  # Keep the plot window open at the end
-
-
