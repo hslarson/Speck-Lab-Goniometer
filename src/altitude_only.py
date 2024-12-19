@@ -12,6 +12,7 @@ import csv
 ALTITUDE_START = -80 # Starting angle (degrees) of sweep.
 ALTITUDE_END = 80 # Final angle (degrees) of sweep
 ALTITUDE_STEP = 0.2 # Degrees between each measurement
+SETTLE_TIME = 0.5 # Time (in seconds) to wait before collecting measurements after moving motor
 
 # === Spectrometer parameters ===
 INTEGRATION_TIME = 5000 # Integration time (microseconds)
@@ -70,7 +71,7 @@ for alt in altitude_angles:
     set_altitude(altitude_stage, float(alt))
 
     # Motion settling time
-    time.sleep(1)
+    time.sleep(SETTLE_TIME)
 
     # Take new readings
     reading = np.zeros(spec.pixels)
@@ -80,12 +81,12 @@ for alt in altitude_angles:
     # Post-process data
     reading /= AVERAGING_POINTS
     kernel = np.ones(BOXCAR_WIDTH) / BOXCAR_WIDTH
-    reading = np.convolve(reading, kernel, mode='valid')
+    reading = np.convolve(reading, kernel, mode='same')
 
     # Save readings to csv
     with open(output_filename, mode='a', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow([alt] + reading)
+        writer.writerow([alt] + reading.tolist())
 
     # Show readings in figure
     line.set_data(wavelengths, reading)
