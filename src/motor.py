@@ -41,6 +41,7 @@ def get_axes():
     # Check that both stages were found
     assert (azimuth_axis != None), "Azimuth stage not detected"
     assert (altitude_axis != None), "Altitude stage not detected"
+    print("Found both stages")
 
     return azimuth_axis, altitude_axis
 
@@ -59,6 +60,7 @@ def init_axes(azimuth_axis: Axis, altitude_axis: Axis):
     # Safely home stages
     # If we don't ensure that the angle is positive,
     # The motor may rotate in the wrong direction while homing
+    print("Homing stages")
     az_pos = azimuth_axis.get_position(Units.ANGLE_DEGREES)
     assert abs(az_pos) < 180, "Azimuth position is large. Please manually move closer to zero."
     if az_pos < 0: azimuth_axis.move_relative(-az_pos+5, Units.ANGLE_DEGREES)
