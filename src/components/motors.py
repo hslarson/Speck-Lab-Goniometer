@@ -113,7 +113,7 @@ class ZaberRotaryStage(ZaberMotor):
         self._axis.move_relative(offset_deg, Units.ANGLE_DEGREES)
 
     def get_angle(self):
-        return self._axis.get_position(Units.ANGLE_DEGREES)
+        return self._axis.get_position(Units.ANGLE_DEGREES) # TODO: Offset?
 
     def home(self):
         """Safely home axis. Make sure the axis moves in the correct direction."""
@@ -156,7 +156,7 @@ class ZaberLinearStage(ZaberMotor):
         """Move relative amount in mm"""
         self._axis.move_relative(offset_mm, Units.LENGTH_MILLIMETRES)
 
-    def get_angle(self):
+    def get_position(self):
         """Get absolute position in mm"""
         return self._axis.get_position(Units.LENGTH_MILLIMETRES)
     
