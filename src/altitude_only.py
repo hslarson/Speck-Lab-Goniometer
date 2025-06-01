@@ -6,6 +6,7 @@ import csv
 
 from components.spectrometer import *
 from components.motors import *
+from alignment import *
 
 
 # === Angular sweep parameters ===
@@ -122,6 +123,24 @@ ax.set_ylim(0, 1024) # TODO: what is the max counts?
 ax.set_xlabel('Wavelength (nm)')
 ax.set_ylabel('Counts')
 plt.ion()
+
+# === Align sample ===
+# Compute pointing functions
+m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
+
+# Do Z optimization
+z_points = np.linspace(30, 40, 5)
+align_sample_z(
+    spec, 
+    x_stage,
+    y_stage,
+    z_stage,
+    altitude_stage, 
+    z_points,
+    m_x, b_x,
+    m_y, b_y,
+    5
+)
 
 
 # === Sweep Altitude ===

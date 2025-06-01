@@ -198,7 +198,7 @@ def align_sample_z(
         print("Warning: Best y sample was on the edge of the search grid")
     min_idx = max(max_idx-1, 0)
     max_idx = min(max_idx+1, len(z_points)-1)
-    new_z_points = np.linspace(z_points[min_idx], z_points[min_idx], len(z_points))
+    new_z_points = np.linspace(z_points[min_idx], z_points[max_idx], len(z_points))
 
     # Recursive call
     return align_sample_z(
