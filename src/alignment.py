@@ -217,14 +217,17 @@ def align_sample_z(
 
 
 if __name__ == "__main__":
+    # Open USB
+    conn = open_zaber_connection()
+    
     # Connect to rotary stages
-    azimuth_stage  = ZaberRotaryStage(ZABER_AZIMUTH_SERIAL_NUM)
-    altitude_stage = ZaberRotaryStage(ZABER_ALTITUDE_SERIAL_NUM)
+    azimuth_stage  = ZaberRotaryStage(ZABER_AZIMUTH_SERIAL_NUM, conn)
+    altitude_stage = ZaberRotaryStage(ZABER_ALTITUDE_SERIAL_NUM, conn)
 
     # Connect to linear stages
-    x_stage = ZaberLinearStage(ZABER_X_SERIAL_NUM)
-    y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM)
-    z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM)
+    x_stage = ZaberLinearStage(ZABER_X_SERIAL_NUM, conn)
+    y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM, conn)
+    z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM, conn)
 
     # Home stages
     azimuth_stage.home()

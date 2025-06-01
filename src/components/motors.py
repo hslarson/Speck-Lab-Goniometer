@@ -7,7 +7,7 @@ from .constants import *
 class ZaberMotor:
     """High-level class for both linear and rotary stages"""
 
-    def __init__(self, serial_num, usb_serial_num=ZABER_USB_SERIAL_NUM, baud_rate=ZABER_USB_BAUD_RATE):
+    def __init__(self, serial_num, conn):
         """
         Params:
         - serial_num (int): Device serial number
@@ -15,11 +15,6 @@ class ZaberMotor:
         - usb_serial_num (str): Serial number of USB device controller
         - baud_rate (int): Serial communication baud rate
         """
-
-        # Serial communication info
-        self._usb_serial_num = usb_serial_num
-        self._baud_rate = baud_rate
-
         # Device info
         self._serial_num = serial_num
 
@@ -28,22 +23,10 @@ class ZaberMotor:
         self._axis = None
 
         # Connect to device
-        self.connect()
+        self.connect(conn)
 
-    def connect(self):
+    def connect(self, conn):
         """Connect to Zaber Stage via USB"""
-
-        # Search COM ports for Zaber device
-        ports = serial.tools.list_ports.comports()
-        for p in ports:
-            # Open connection if device is found
-            if p.serial_number == self._usb_serial_num:
-                conn = Connection.open_serial_port(p.device, self._baud_rate)
-                break
-        else:
-            print("Could not find Zaber motor in COM devices")
-            raise ConnectionError
-
         # Find axis
         device_list = conn.detect_devices()
         for device in device_list:
@@ -61,7 +44,7 @@ class ZaberMotor:
 class ZaberRotaryStage(ZaberMotor):
     """Wrapper for controlling Zaber rotary stage"""
 
-    def __init__(self, serial_num, usb_serial_num=ZABER_USB_SERIAL_NUM, baud_rate=ZABER_USB_BAUD_RATE):
+    def __init__(self, serial_num, conn):
         """
         Params:
         - serial_num (int): Device serial number
@@ -72,8 +55,7 @@ class ZaberRotaryStage(ZaberMotor):
         # Initialize parent class
         super().__init__(
             serial_num=serial_num,
-            usb_serial_num=usb_serial_num,
-            baud_rate=baud_rate
+            conn=conn
         )
 
         # Angular offset
@@ -165,17 +147,33 @@ class ZaberLinearStage(ZaberMotor):
         self._axis.home()
 
 
+def open_zaber_connection(usb_serial_num=ZABER_USB_SERIAL_NUM, baud_rate=ZABER_USB_BAUD_RATE):
+    """Open USB COM Port Connection to Zaber"""
+
+    # Search COM ports for Zaber device
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        # Open connection if device is found
+        if p.serial_number == usb_serial_num:
+            conn = Connection.open_serial_port(p.device, baud_rate)
+            return conn
+    else:
+        print("Could not find Zaber motor in COM devices")
+        raise ConnectionError
+
 
 if __name__ == "__main__":
+    # Open USB
+    conn = open_zaber_connection()
     
     # Connect to rotary stages
-    azimuth_stage  = ZaberRotaryStage(ZABER_AZIMUTH_SERIAL_NUM)
-    altitude_stage = ZaberRotaryStage(ZABER_ALTITUDE_SERIAL_NUM)
+    azimuth_stage  = ZaberRotaryStage(ZABER_AZIMUTH_SERIAL_NUM, conn)
+    altitude_stage = ZaberRotaryStage(ZABER_ALTITUDE_SERIAL_NUM, conn)
 
     # Connect to linear stages
-    x_stage = ZaberLinearStage(ZABER_X_SERIAL_NUM)
-    y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM)
-    z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM)
+    x_stage = ZaberLinearStage(ZABER_X_SERIAL_NUM, conn)
+    y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM, conn)
+    z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM, conn)
 
     # Home stages
     azimuth_stage.home()
