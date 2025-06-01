@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 from datetime import datetime
-from spectrometer import *
-from motor import *
 import numpy as np
 import time
 import csv
+
+from components.spectrometer import *
+from components.motors import *
 
 
 # === Angular sweep parameters ===
@@ -15,33 +16,90 @@ ALTITUDE_STEP = 0.2 # Degrees between each measurement
 SETTLE_TIME = 0.5 # Time (in seconds) to wait before collecting measurements after moving motor
 
 # === Spectrometer parameters ===
-INTEGRATION_TIME = 5000 # Integration time (microseconds)
+INTEGRATION_TIME = 5.0 # Integration time (milliseconds)
 AVERAGING_POINTS = 128 # Number of readings to collect at each angle
 BOXCAR_WIDTH = 10 # Moving average filter width. 1 = No smoothing
 
 
+# === Set up motors ===
+# Connect to rotary stages
+azimuth_stage  = ZaberRotaryStage(ZABER_AZIMUTH_SERIAL_NUM)
+altitude_stage = ZaberRotaryStage(ZABER_ALTITUDE_SERIAL_NUM)
 
-# Create array of altitude angles
-altitude_angles = np.arange(ALTITUDE_START, ALTITUDE_END+ALTITUDE_STEP, ALTITUDE_STEP)
+# Connect to linear stages
+x_stage = ZaberLinearStage(ZABER_X_SERIAL_NUM)
+y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM)
+z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM)
 
-# Initialize motors
-azimuth_stage, altitude_stage = get_axes()
-init_axes(azimuth_stage, altitude_stage)
+# Home stages
+azimuth_stage.home()
+altitude_stage.home()
+x_stage.home()
+y_stage.home()
+z_stage.home()
+
+# Configure rotary stages
+azimuth_stage.configure(
+    angle_offset = ZABER_AZIMUTH_ANGLE_OFFSET,
+    limit_min = -90,
+    limit_max =  90,
+    max_speed = 30,
+    max_accel = 5
+)
+
+altitude_stage.configure(
+    angle_offset = ZABER_ALTITUDE_ANGLE_OFFSET,
+    limit_min = -90,
+    limit_max =  90,
+    max_speed = 30,
+    max_accel = 5
+)
+
+# Configure linear stages
+x_stage.configure(
+    limit_min = 0,
+    limit_max = 50,
+    max_speed = 10,
+    max_accel = 10,
+)
+
+y_stage.configure(
+    limit_min = 0,
+    limit_max = 50,
+    max_speed = 10,
+    max_accel = 10,
+)
+
+z_stage.configure(
+    limit_min = 0,
+    limit_max = 50,
+    max_speed = 10,
+    max_accel = 10,
+)
 
 # Set azimuth position
-set_azimuth(azimuth_stage, 0)
-
-# Set altitude speed and acceleration
-altitude_stage.settings.set('maxspeed', 30, Units.ANGULAR_VELOCITY_DEGREES_PER_SECOND)
-altitude_stage.settings.set('motion.accelonly', 20, Units.ANGULAR_ACCELERATION_DEGREES_PER_SECOND_SQUARED)
-altitude_stage.settings.set('motion.decelonly', 20, Units.ANGULAR_ACCELERATION_DEGREES_PER_SECOND_SQUARED)
+azimuth_stage.set_angle(0)
 
 
-# Initialize spectrometer
+# === Initialize spectrometer ===
 spec = get_spectrometer()
-wavelengths = spec.wavelengths()
-set_integration_time(spec, INTEGRATION_TIME)
+configure_spectrometer(
+    spec,
+    int_time_ms=INTEGRATION_TIME,
+    averages=AVERAGING_POINTS
+)
 
+# Take dark spectrum
+capture_dark_spectrum(spec)
+
+# Get spectrometer wavelengths
+data = capture_spectrum(spec)
+wavelengths = data[:,0]
+
+
+# === Initialize Outputs ===
+# Create array of altitude angles
+altitude_angles = np.arange(ALTITUDE_START, ALTITUDE_END+ALTITUDE_STEP, ALTITUDE_STEP)
 
 # Create output CSV
 output_file_prefix = "../data/goniometer_data"
@@ -53,30 +111,27 @@ with open(output_filename, mode='w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(col_labels)
 
-
 # Initialize the spectrogram plot
 fig, ax = plt.subplots()
 line, = ax.plot([], [], lw=2)
 ax.set_xlim(min(wavelengths), max(wavelengths))
-ax.set_ylim(0, spec.max_intensity)
+ax.set_ylim(0, 1024) # TODO: what is the max counts?
 ax.set_xlabel('Wavelength (nm)')
 ax.set_ylabel('Counts')
 plt.ion()
 
 
-# Sweep altitude
+# === Sweep Altitude ===
 for alt in altitude_angles:
     # Move motor
     print(f"Setting Altitude to {alt:+5.2f}°")
-    set_altitude(altitude_stage, float(alt))
+    altitude_stage.set_angle(float(alt))
 
     # Motion settling time
     time.sleep(SETTLE_TIME)
 
     # Take new readings
-    reading = np.zeros(spec.pixels)
-    for _ in range(AVERAGING_POINTS):
-        reading += spec.intensities()
+    reading = capture_spectrum(spec)[:,1]
 
     # Post-process data
     reading /= AVERAGING_POINTS

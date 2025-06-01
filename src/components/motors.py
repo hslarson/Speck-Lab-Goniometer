@@ -1,7 +1,7 @@
 import serial.tools.list_ports
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
-from constants import *
+from .constants import *
 
 
 class ZaberMotor:
