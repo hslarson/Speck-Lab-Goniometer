@@ -203,26 +203,26 @@ if __name__ == "__main__":
     x_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 10,
-        max_accel = 10,
+        max_speed = 5,
+        max_accel = 5,
     )
 
     y_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 10,
-        max_accel = 10,
+        max_speed = 5,
+        max_accel = 5,
     )
 
     z_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 10,
-        max_accel = 10,
+        max_speed = 5,
+        max_accel = 5,
     )
 
-    azimuth_stage.set_angle(20)
-    altitude_stage.set_angle(0)
+    azimuth_stage.set_angle(0)
+    altitude_stage.set_angle(20)
 
     x_stage.set_position(25.767)
     y_stage.set_position(30.014)

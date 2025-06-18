@@ -11,14 +11,14 @@ from alignment import *
 
 # === Angular sweep parameters ===
 # -90 is arm horizontal left. +90 is arm horizontal right
-ALTITUDE_START = -80 # Starting angle (degrees) of sweep.
-ALTITUDE_END = 80 # Final angle (degrees) of sweep
-ALTITUDE_STEP = 0.2 # Degrees between each measurement
+ALTITUDE_START = -90 # Starting angle (degrees) of sweep.
+ALTITUDE_END = 90 # Final angle (degrees) of sweep
+ALTITUDE_STEP = 1 # Degrees between each measurement
 SETTLE_TIME = 0.5 # Time (in seconds) to wait before collecting measurements after moving motor
 
 # === Spectrometer parameters ===
-INTEGRATION_TIME = 5.0 # Integration time (milliseconds)
-AVERAGING_POINTS = 128 # Number of readings to collect at each angle
+INTEGRATION_TIME = 80 # Integration time (milliseconds)
+AVERAGING_POINTS = 10 # Number of readings to collect at each angle
 BOXCAR_WIDTH = 10 # Moving average filter width. 1 = No smoothing
 
 
@@ -47,7 +47,7 @@ azimuth_stage.configure(
     angle_offset = ZABER_AZIMUTH_ANGLE_OFFSET,
     limit_min = -90,
     limit_max =  90,
-    max_speed = 30,
+    max_speed = 5,
     max_accel = 5
 )
 
@@ -55,7 +55,7 @@ altitude_stage.configure(
     angle_offset = ZABER_ALTITUDE_ANGLE_OFFSET,
     limit_min = -90,
     limit_max =  90,
-    max_speed = 30,
+    max_speed = 5,
     max_accel = 5
 )
 
@@ -63,22 +63,22 @@ altitude_stage.configure(
 x_stage.configure(
     limit_min = 0,
     limit_max = 50,
-    max_speed = 10,
-    max_accel = 10,
+    max_speed = 5,
+    max_accel = 5,
 )
 
 y_stage.configure(
     limit_min = 0,
     limit_max = 50,
-    max_speed = 10,
-    max_accel = 10,
+    max_speed = 5,
+    max_accel = 5,
 )
 
 z_stage.configure(
     limit_min = 0,
     limit_max = 50,
-    max_speed = 10,
-    max_accel = 10,
+    max_speed = 5,
+    max_accel = 5,
 )
 
 # Set azimuth position

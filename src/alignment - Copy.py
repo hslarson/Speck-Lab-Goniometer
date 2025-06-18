@@ -241,7 +241,7 @@ if __name__ == "__main__":
         angle_offset = ZABER_AZIMUTH_ANGLE_OFFSET,
         limit_min = -90,
         limit_max =  90,
-        max_speed = 5,
+        max_speed = 30,
         max_accel = 5
     )
 
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         angle_offset = ZABER_ALTITUDE_ANGLE_OFFSET,
         limit_min = -90,
         limit_max =  90,
-        max_speed = 5,
+        max_speed = 30,
         max_accel = 5
     )
 
@@ -257,22 +257,22 @@ if __name__ == "__main__":
     x_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 20,
+        max_accel = 15,
     )
 
     y_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 20,
+        max_accel = 15,
     )
 
     z_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 20,
+        max_accel = 15,
     )
 
     # Set rotary stage positions

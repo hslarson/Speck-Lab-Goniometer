@@ -8,6 +8,11 @@ import numpy as np
 # Altitude samples for z alignment
 ALTITUDE_SAMPLES = [0, 10, 20, 30, 40, 50, 60]
 
+recursion_val_x_y = 5
+
+x_samp = 5
+
+y_samp = 5
 
 def align_sample_xy(
         spectrometer,
@@ -97,16 +102,16 @@ def get_pointing_error(
     """
 
     # Initialize samples
-    sample_points = np.linspace(0, 50, num_points) # TODO: shouldn't hard code this
+    sample_points = np.linspace(0, 25, num_points) # TODO: shouldn't hard code this
     samples = np.zeros((num_points, 2))
     
     # Align sample at each z point
     for iz, z in enumerate(sample_points):
         z_stage.set_position(z)
 
-        x_points = np.linspace(20, 40, 5)
-        y_points = np.linspace(30, 50, 5)
-        x_mean, y_mean = align_sample_xy(spectrometer, x_stage, y_stage, x_points, y_points, 8)
+        x_points = np.linspace(20, 40, x_samp)
+        y_points = np.linspace(30, 50, y_samp)
+        x_mean, y_mean = align_sample_xy(spectrometer, x_stage, y_stage, x_points, y_points, recursion_val_x_y)
         samples[iz,:] = [x_mean, y_mean]
     
     # Compute pointing error functions x(z), y(z)
@@ -241,7 +246,7 @@ if __name__ == "__main__":
         angle_offset = ZABER_AZIMUTH_ANGLE_OFFSET,
         limit_min = -90,
         limit_max =  90,
-        max_speed = 5,
+        max_speed = 30,
         max_accel = 5
     )
 
@@ -249,7 +254,7 @@ if __name__ == "__main__":
         angle_offset = ZABER_ALTITUDE_ANGLE_OFFSET,
         limit_min = -90,
         limit_max =  90,
-        max_speed = 5,
+        max_speed = 30,
         max_accel = 5
     )
 
@@ -257,22 +262,22 @@ if __name__ == "__main__":
     x_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 5,
+        max_accel = 5,
     )
 
     y_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 5,
+        max_accel = 5,
     )
 
     z_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 1,
-        max_accel = 1,
+        max_speed = 5,
+        max_accel = 5,
     )
 
     # Set rotary stage positions
