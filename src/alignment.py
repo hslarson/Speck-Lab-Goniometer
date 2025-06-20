@@ -88,12 +88,10 @@ def align_sample_xy_grid(
 def align_sample_gradient_ascent(
         spectrometer,
         x_stage, y_stage,
-        step_size=0.01,
-        grad_step=0.005,
-        max_iters=20,
-        tol=1e-4
+        init_step=1,
+        min_step=0.001
     ):
-    """Align LED to fiber using gradient ascent on L1 norm of spectrum"""
+    """Align LED to fiber by hill climbing with adaptive step size"""
 
     def measure(x, y):
         x_stage.set_position(x)
@@ -101,34 +99,49 @@ def align_sample_gradient_ascent(
         data = capture_spectrum(spectrometer)
         return np.sum(np.abs(data[:, 1]))
 
-    # Get initial positions
+    # Initial position
     x = x_stage.get_position()
     y = y_stage.get_position()
+    step = init_step
 
-    for i in range(max_iters):
-        current_score = measure(x, y)
+    while step >= min_step:
+        # 8 surrounding positions
+        directions = [
+            (0, step),     # N
+            (step, step),  # NE
+            (step, 0),     # E
+            (step, -step), # SE
+            (0, -step),    # S
+            (-step, -step),# SW
+            (-step, 0),    # W
+            (-step, step)  # NW
+        ]
 
-        # Estimate gradient using central difference
-        grad_x = (measure(x + grad_step, y) - measure(x - grad_step, y)) / (2 * grad_step)
-        grad_y = (measure(x, y + grad_step) - measure(x, y - grad_step)) / (2 * grad_step)
+        # Measure center
+        best_score = measure(x, y)
+        best_pos = (x, y)
 
-        grad_norm = np.sqrt(grad_x**2 + grad_y**2)
-        if grad_norm < tol:
-            print(f"Converged at iteration {i}")
-            break
+        # Measure neighbors
+        for dx, dy in directions:
+            x_new, y_new = x + dx, y + dy
+            score = measure(x_new, y_new)
+            if score > best_score:
+                best_score = score
+                best_pos = (x_new, y_new)
 
-        # Normalize gradient and update position
-        x += step_size * grad_x
-        y += step_size * grad_y
+        # If we find a better neighbor, move there
+        if best_pos != (x, y):
+            print(f"Moving to better point at step {step:.4f}: ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
+            x, y = best_pos
+        
+        # If the center is the best, lower the search radius and repeat
+        else:
+            step *= 0.5
+            print(f"No improvement at step {step*2:.4f}, reducing step to {step:.4f}")
 
-        print(f"Iter {i}: x = {x:.4f}, y = {y:.4f}, L1 = {current_score:.2f}, ∇ = ({grad_x:.2f}, {grad_y:.2f})")
-
-    # Set final position
+    # Final position
     x_stage.set_position(x)
     y_stage.set_position(y)
-
-    return x, y
-
 
 
 def get_pointing_error(
