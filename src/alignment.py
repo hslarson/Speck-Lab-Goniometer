@@ -6,7 +6,7 @@ import numpy as np
 
 
 # Altitude samples for z alignment
-ALTITUDE_SAMPLES = [0, 10, 20, 30, 40, 50, 60]
+ALTITUDE_SAMPLES = [0, 20, 40, 60]
 
 
 def align_sample_xy_grid(
@@ -14,8 +14,9 @@ def align_sample_xy_grid(
         x_stage: ZaberLinearStage, 
         y_stage: ZaberLinearStage, 
         x_points, y_points,
+        wavelength_mask,
         recursion_limit,
-        recursion_count=0
+        recursion_count=0,
     ):
     """Laterally align sample using a recursive grid search"""
 
@@ -48,9 +49,7 @@ def align_sample_xy_grid(
 
             # Collect sample
             data = capture_spectrum(spectrometer)
-            mean_intensity = np.mean(data[:, 1]) # TODO: restrict wavelength range?
-
-            # Save sample
+            mean_intensity = np.mean(data[wavelength_mask, 1] if wavelength_mask else data[:, 1])
             samples[iy, ix] = mean_intensity
     
     # Find maximum sample value and its indices
@@ -79,30 +78,37 @@ def align_sample_xy_grid(
         y_stage,
         new_x_points,
         new_y_points,
+        wavelength_mask,
         recursion_limit,
         recursion_count+1
     )
 
 
-
-def align_sample_gradient_ascent(
+def align_sample_xy_greedy(
         spectrometer,
         x_stage, y_stage,
         init_step=1,
-        target_step=0.001
+        target_step=0.05,
+        wavelength_mask=None
     ):
-    """Align LED to fiber by hill climbing with adaptive step size"""
+    """Laterally align sample by greedy hill climbing with adaptive step size"""
 
     def measure(x, y):
         x_stage.set_position(x)
         y_stage.set_position(y)
         data = capture_spectrum(spectrometer)
-        return np.sum(data[:, 1])
+        return np.sum(data[wavelength_mask, 1] if wavelength_mask else data[:, 1])
 
-    # Initial position
+    # Get initial position
     x = x_stage.get_position()
     y = y_stage.get_position()
     step = init_step
+
+    # Measure center statistics
+    readings = [measure(x, y) for _ in range(10)]
+    std_dev = np.std(readings)
+    best_score = np.mean(readings)
+    best_pos = (x, y)
 
     while step >= target_step:
         # 8 surrounding positions
@@ -114,39 +120,36 @@ def align_sample_gradient_ascent(
             (0,     -step), # S
             (-step, -step), # SW
             (-step,  0),    # W
-            (-step,  step)  #  NW
+            (-step,  step)  # NW
         ]
-
-        # Measure center
-        readings = [measure(x, y) for _ in range(10)]
-        std_dev = np.std(readings)
-        best_score = np.mean(readings)
-        best_pos = (x, y)
-
-        print(f"[({x:.3f}, {y:.3f}) --> {best_score:.2f}")
 
         # Measure neighbors
         for dx, dy in directions:
             x_new, y_new = x + dx, y + dy
             score = measure(x_new, y_new)
-            print(f"[({x_new:.3f}, {y_new:.3f}) --> {score:.2f}")
             if score > best_score + 1.5*std_dev:
                 best_score = score
                 best_pos = (x_new, y_new)
 
         # If we find a better neighbor, move there
         if best_pos != (x, y):
-            print(f"Moving to better point at step {step:.4f}: ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
+            print(f"Moving to ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
+            
+            # Measure statistics for new center
             x, y = best_pos
+            readings = [measure(x, y) for _ in range(10)]
+            std_dev = np.std(readings)
+            best_score = np.mean(readings)
         
         # If the center is the best, lower the search radius and repeat
         else:
             step *= 0.5
-            print(f"No improvement at step {step*2:.4f}, reducing step to {step:.4f}")
+            print(f"No improvement, reducing step to {step:.4f}")
 
-    # Final position
+    # Set final position
     x_stage.set_position(x)
     y_stage.set_position(y)
+    return x, y
 
 
 def get_pointing_error(
@@ -154,7 +157,8 @@ def get_pointing_error(
     x_stage: ZaberLinearStage,
     y_stage: ZaberLinearStage,
     z_stage: ZaberLinearStage,
-    num_points
+    sample_points,
+    wavelength_mask=None
 ):
     """
     Laterally align sample at multiple z positions.
@@ -162,16 +166,17 @@ def get_pointing_error(
     """
 
     # Initialize samples
-    sample_points = np.linspace(0, 50, num_points) # TODO: shouldn't hard code this
-    samples = np.zeros((num_points, 2))
+    samples = np.zeros((len(sample_points), 2))
     
     # Align sample at each z point
     for iz, z in enumerate(sample_points):
         z_stage.set_position(z)
-
-        x_points = np.linspace(20, 40, 5)
-        y_points = np.linspace(30, 50, 5)
-        x_mean, y_mean = align_sample_xy(spectrometer, x_stage, y_stage, x_points, y_points, 8)
+        x_mean, y_mean = align_sample_xy_greedy(
+            spectrometer, 
+            x_stage, y_stage, 
+            init_step=0.5, 
+            wavelength_mask=wavelength_mask
+        )
         samples[iz,:] = [x_mean, y_mean]
     
     # Compute pointing error functions x(z), y(z)
@@ -182,51 +187,33 @@ def get_pointing_error(
     x_pred = m_x*sample_points+b_x
     ss_res = np.sum((samples[:,0]-x_pred)**2)
     ss_tot = np.sum((samples[:,0]-np.mean(samples[:,0]))**2)
-    r_squared = 1 - (ss_res/ss_tot)
-    print(f"z(x) = {m_x:.3f}x + {b_x}. R-Squared={r_squared:.3f}")
+    r_squared_x = 1 - (ss_res/ss_tot)
+    print(f"x(z) = {m_x:.3f}z + {b_x}. R-Squared={r_squared_x:.3f}")
 
     y_pred = m_y*sample_points+b_y
     ss_res = np.sum((samples[:,1]-y_pred)**2)
     ss_tot = np.sum((samples[:,1]-np.mean(samples[:,1]))**2)
-    r_squared = 1 - (ss_res/ss_tot)
-    print(f"z(y) = {m_y:.3f}x + {b_y}. R-Squared={r_squared:.3f}")
+    r_squared_y = 1 - (ss_res/ss_tot)
+    print(f"y(z) = {m_y:.3f}z + {b_y}. R-Squared={r_squared_y:.3f}")
 
-    return m_x, b_x, m_y, b_y
+    return m_x, b_x, m_y, b_y, r_squared_x, r_squared_y
 
 
-def align_sample_z(
+def align_sample_z_greedy(
         spectrometer,
         x_stage: ZaberLinearStage,
         y_stage: ZaberLinearStage,
         z_stage: ZaberLinearStage,
         altitude_stage: ZaberRotaryStage,
-        z_points,
         m_x, b_x,
         m_y, b_y,
-        recursion_limit,
-        recursion_count=0
+        init_step=1,
+        target_step=0.05,
+        wavelength_mask=None
     ):
-    
-    # Check recursion depth. Stop recursion if needed
-    if recursion_count > recursion_limit:
-        # Compute best estimate
-        z_avg = np.mean(z_points)
+    """Vertically align sample by greedy hill climbing with adaptive step size"""
 
-        # Set final position to best estimate
-        z_stage.set_position(z_avg)
-
-        return z_avg
-    
-    # Initialize sample matrix
-    samples = np.zeros((len(z_points), len(ALTITUDE_SAMPLES)))
-
-    # Debug output
-    print("-"*30)
-    print(f"Recursion Depth = {recursion_count}")
-    print(f"Z Search Limits: [{min(z_points):.3f}, {max(z_points):.3f}] ({len(z_points)} Points)")
-
-    # Do grid search
-    for iz, z in enumerate(z_points):
+    def measure(z):
         # Move stage to z position
         z_stage.set_position(z)
 
@@ -235,49 +222,45 @@ def align_sample_z(
         y_stage.set_position(m_y*z+b_y)
 
         # Sample different angles
-        for ialt, alt in enumerate(ALTITUDE_SAMPLES):
+        score = 0
+        for alt in ALTITUDE_SAMPLES:
             altitude_stage.set_angle(alt)
-
-            # Collect samples
             data = capture_spectrum(spectrometer)
-            mean_intensity = np.mean(data[:, 1]) # TODO: restrict wavelength range?
+            score += np.sum(data[wavelength_mask, 1] if wavelength_mask else data[:, 1]) 
+        return score
 
-            # Save sample
-            samples[iz, ialt] = mean_intensity
+    # Get initial position
+    z = z_stage.get_position()
+    step = init_step
 
-    # Print samples
-    np.set_printoptions(precision=3, suppress=True)  # 3 decimal places, no scientific notation
-    print(samples)
+    # Measure center
+    best_score = measure(z)
+    best_pos = z
 
-    # Normalize and integrate samples
-    row_maxes = np.max(samples, axis=1, keepdims=True)
-    normalized = samples / row_maxes
-    row_sums = np.sum(normalized, axis=1)
+    while step >= target_step:
+        # Measure neighbors
+        for z_test in (z+step, z-step):
+            score = measure(z_test)
+            if score > best_score:
+                best_score = score
+                best_z = z_test
 
-    # Find maximum sample value and its indices
-    max_idx = np.argmax(row_sums)
-    print(f"Best sample: {z_points[max_idx]}")
+        # If we find a better neighbor, move there
+        if best_z != z:
+            print(f"Moving to ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
+            z = best_pos
+            best_score = measure(z)
+        
+        # If the center is the best, lower the search radius and repeat
+        else:
+            step *= 0.5
+            print(f"No improvement, reducing step to {step:.4f}")
 
-    # Define new search limits
-    if (max_idx-1 < 0) or (max_idx+1 >= len(z_points)):
-        print("Warning: Best y sample was on the edge of the search grid")
-    min_idx = max(max_idx-1, 0)
-    max_idx = min(max_idx+1, len(z_points)-1)
-    new_z_points = np.linspace(z_points[min_idx], z_points[max_idx], len(z_points))
-
-    # Recursive call
-    return align_sample_z(
-        spectrometer,
-        x_stage,
-        y_stage,
-        z_stage,
-        altitude_stage,
-        new_z_points,
-        m_x, b_x,
-        m_y, b_y,
-        recursion_limit,
-        recursion_count+1
-    )
+    # Set final position
+    z_stage.set_position(z)
+    x_stage.set_position(m_x*z+b_x)
+    y_stage.set_position(m_y*z+b_y)
+    return z
 
 
 
@@ -322,15 +305,15 @@ if __name__ == "__main__":
     x_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 20,
-        max_accel = 15,
+        max_speed = 10,
+        max_accel = 5,
     )
 
     y_stage.configure(
         limit_min = 0,
         limit_max = 50,
-        max_speed = 20,
-        max_accel = 15,
+        max_speed = 10,
+        max_accel = 5,
     )
 
     z_stage.configure(
@@ -355,21 +338,30 @@ if __name__ == "__main__":
     # Take dark spectrum
     capture_dark_spectrum(spec)
 
-    x, y = align_sample_gradient_ascent(spec, x_stage, y_stage)
 
-    # # Compute pointing functions
-    # m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
+    # Define wavelength mask
+    WAVELENGTH_MIN = 400
+    WAVELENGTH_MAX = 500
+    mask = (data[:, 0] >= WAVELENGTH_MIN) & (data[:, 0] <= WAVELENGTH_MAX)
+    
+    # Align sample in x/y
+    sample_points = np.linspace(0, 50, 5)
+    m_x, b_x, m_y, b_y, r_sq_x, r_sq_y = get_pointing_error(
+        spec, 
+        x_stage, y_stage, z_stage, 
+        sample_points,
+        mask
+    )
 
-    # # Do Z optimization
-    # z_points = np.linspace(30, 40, 5)
-    # align_sample_z(
-    #     spec, 
-    #     x_stage,
-    #     y_stage,
-    #     z_stage,
-    #     altitude_stage, 
-    #     z_points,
-    #     m_x, b_x,
-    #     m_y, b_y,
-    #     5
-    # )
+    # Assert linearity
+    assert (r_sq_x > 0.98) and (r_sq_y > 0.98), "Line fitting failed"
+    
+    # Align sample in z
+    align_sample_z_greedy(
+        spec,
+        x_stage, y_stage, z_stage,
+        altitude_stage,
+        m_x, b_y,
+        m_y, b_y,
+        wavelength_mask=mask
+    )
