@@ -9,7 +9,7 @@ import numpy as np
 ALTITUDE_SAMPLES = [0, 10, 20, 30, 40, 50, 60]
 
 
-def align_sample_xy(
+def align_sample_xy_grid(
         spectrometer,
         x_stage: ZaberLinearStage, 
         y_stage: ZaberLinearStage, 
@@ -73,7 +73,7 @@ def align_sample_xy(
     new_y_points = np.linspace(y_points[iy_min], y_points[iy_max], len(y_points))
 
     # Recursive function call
-    return align_sample_xy(
+    return align_sample_xy_grid(
         spectrometer,
         x_stage,
         y_stage,
@@ -82,6 +82,53 @@ def align_sample_xy(
         recursion_limit,
         recursion_count+1
     )
+
+
+
+def align_sample_gradient_ascent(
+        spectrometer,
+        x_stage, y_stage,
+        step_size=0.01,
+        grad_step=0.005,
+        max_iters=20,
+        tol=1e-4
+    ):
+    """Align LED to fiber using gradient ascent on L1 norm of spectrum"""
+
+    def measure(x, y):
+        x_stage.set_position(x)
+        y_stage.set_position(y)
+        data = capture_spectrum(spectrometer)
+        return np.sum(np.abs(data[:, 1]))
+
+    # Get initial positions
+    x = x_stage.get_position()
+    y = y_stage.get_position()
+
+    for i in range(max_iters):
+        current_score = measure(x, y)
+
+        # Estimate gradient using central difference
+        grad_x = (measure(x + grad_step, y) - measure(x - grad_step, y)) / (2 * grad_step)
+        grad_y = (measure(x, y + grad_step) - measure(x, y - grad_step)) / (2 * grad_step)
+
+        grad_norm = np.sqrt(grad_x**2 + grad_y**2)
+        if grad_norm < tol:
+            print(f"Converged at iteration {i}")
+            break
+
+        # Normalize gradient and update position
+        x += step_size * grad_x
+        y += step_size * grad_y
+
+        print(f"Iter {i}: x = {x:.4f}, y = {y:.4f}, L1 = {current_score:.2f}, ∇ = ({grad_x:.2f}, {grad_y:.2f})")
+
+    # Set final position
+    x_stage.set_position(x)
+    y_stage.set_position(y)
+
+    return x, y
+
 
 
 def get_pointing_error(
@@ -283,26 +330,28 @@ if __name__ == "__main__":
     spec = get_spectrometer()
     configure_spectrometer(
         spec,
-        int_time_ms=100,
-        averages=8
+        int_time_ms=5,
+        averages=128
     )
 
     # Take dark spectrum
     capture_dark_spectrum(spec)
 
-    # Compute pointing functions
-    m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
+    x, y = align_sample_gradient_ascent(spec, x_stage, y_stage)
 
-    # Do Z optimization
-    z_points = np.linspace(30, 40, 5)
-    align_sample_z(
-        spec, 
-        x_stage,
-        y_stage,
-        z_stage,
-        altitude_stage, 
-        z_points,
-        m_x, b_x,
-        m_y, b_y,
-        5
-    )
+    # # Compute pointing functions
+    # m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
+
+    # # Do Z optimization
+    # z_points = np.linspace(30, 40, 5)
+    # align_sample_z(
+    #     spec, 
+    #     x_stage,
+    #     y_stage,
+    #     z_stage,
+    #     altitude_stage, 
+    #     z_points,
+    #     m_x, b_x,
+    #     m_y, b_y,
+    #     5
+    # )
