@@ -13,12 +13,12 @@ from alignment import *
 # -90 is arm horizontal left. +90 is arm horizontal right
 ALTITUDE_START = -80 # Starting angle (degrees) of sweep.
 ALTITUDE_END = 80 # Final angle (degrees) of sweep
-ALTITUDE_STEP = 0.2 # Degrees between each measurement
+ALTITUDE_STEP = 1 # Degrees between each measurement
 SETTLE_TIME = 0.5 # Time (in seconds) to wait before collecting measurements after moving motor
 
 # === Spectrometer parameters ===
-INTEGRATION_TIME = 5.0 # Integration time (milliseconds)
-AVERAGING_POINTS = 128 # Number of readings to collect at each angle
+INTEGRATION_TIME = 1.2 # Integration time (milliseconds)
+AVERAGING_POINTS = 100 # Number of readings to collect at each angle
 BOXCAR_WIDTH = 10 # Moving average filter width. 1 = No smoothing
 
 
@@ -36,11 +36,11 @@ y_stage = ZaberLinearStage(ZABER_Y_SERIAL_NUM, conn)
 z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM, conn)
 
 # Home stages
-azimuth_stage.home()
-altitude_stage.home()
-x_stage.home()
-y_stage.home()
-z_stage.home()
+# azimuth_stage.home()
+# altitude_stage.home()
+# x_stage.home()
+# y_stage.home()
+# z_stage.home()
 
 # Configure rotary stages
 azimuth_stage.configure(
@@ -119,28 +119,28 @@ with open(output_filename, mode='w', newline='') as f:
 fig, ax = plt.subplots()
 line, = ax.plot([], [], lw=2)
 ax.set_xlim(min(wavelengths), max(wavelengths))
-ax.set_ylim(0, 1024) # TODO: what is the max counts?
+ax.set_ylim(0, 65536) # TODO: what is the max counts?
 ax.set_xlabel('Wavelength (nm)')
 ax.set_ylabel('Counts')
 plt.ion()
 
 # === Align sample ===
 # Compute pointing functions
-m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
+# m_x, b_x, m_y, b_y = get_pointing_error(spec, x_stage, y_stage, z_stage, 3)
 
 # Do Z optimization
-z_points = np.linspace(30, 40, 5)
-align_sample_z(
-    spec, 
-    x_stage,
-    y_stage,
-    z_stage,
-    altitude_stage, 
-    z_points,
-    m_x, b_x,
-    m_y, b_y,
-    5
-)
+# z_points = np.linspace(30, 40, 5)
+# align_sample_z(
+#     spec, 
+#     x_stage,
+#     y_stage,
+#     z_stage,
+#     altitude_stage, 
+#     z_points,
+#     m_x, b_x,
+#     m_y, b_y,
+#     5
+# )
 
 
 # === Sweep Altitude ===
@@ -156,9 +156,8 @@ for alt in altitude_angles:
     reading = capture_spectrum(spec)[:,1]
 
     # Post-process data
-    reading /= AVERAGING_POINTS
-    kernel = np.ones(BOXCAR_WIDTH) / BOXCAR_WIDTH
-    reading = np.convolve(reading, kernel, mode='same')
+    # kernel = np.ones(BOXCAR_WIDTH) / BOXCAR_WIDTH
+    # reading = np.convolve(reading, kernel, mode='same')
 
     # Save readings to csv
     with open(output_filename, mode='a', newline='') as f:

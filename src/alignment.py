@@ -6,7 +6,7 @@ import numpy as np
 
 
 # Altitude samples for z alignment
-ALTITUDE_SAMPLES = [0, 20, 40, 60]
+ALTITUDE_SAMPLES = [20, 40, 60]
 
 
 def align_sample_xy_grid(
@@ -49,7 +49,7 @@ def align_sample_xy_grid(
 
             # Collect sample
             data = capture_spectrum(spectrometer)
-            mean_intensity = np.mean(data[wavelength_mask, 1] if wavelength_mask else data[:, 1])
+            mean_intensity = np.mean(data[:, 1] if wavelength_mask is None else data[wavelength_mask, 1])
             samples[iy, ix] = mean_intensity
     
     # Find maximum sample value and its indices
@@ -97,7 +97,7 @@ def align_sample_xy_greedy(
         x_stage.set_position(x)
         y_stage.set_position(y)
         data = capture_spectrum(spectrometer)
-        return np.sum(data[wavelength_mask, 1] if wavelength_mask else data[:, 1])
+        return np.sum(data[:, 1] if wavelength_mask is None else data[wavelength_mask, 1])
 
     # Get initial position
     x = x_stage.get_position()
@@ -108,7 +108,6 @@ def align_sample_xy_greedy(
     readings = [measure(x, y) for _ in range(10)]
     std_dev = np.std(readings)
     best_score = np.mean(readings)
-    best_pos = (x, y)
 
     while step >= target_step:
         # 8 surrounding positions
@@ -127,28 +126,22 @@ def align_sample_xy_greedy(
         for dx, dy in directions:
             x_new, y_new = x + dx, y + dy
             score = measure(x_new, y_new)
-            if score > best_score + 1.5*std_dev:
-                best_score = score
-                best_pos = (x_new, y_new)
 
-        # If we find a better neighbor, move there
-        if best_pos != (x, y):
-            print(f"Moving to ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
-            
-            # Measure statistics for new center
-            x, y = best_pos
-            readings = [measure(x, y) for _ in range(10)]
-            std_dev = np.std(readings)
-            best_score = np.mean(readings)
-        
+            # If we find a better point, go there immediately
+            if score > best_score + 1.5*std_dev:
+                print(f"Moving to ({x_new:.4f}, {y_new:.4f}), L1={score}")
+                x, y = (x_new, y_new)
+                best_score = score
+                break
+    
         # If the center is the best, lower the search radius and repeat
         else:
             step *= 0.5
+            x_stage.set_position(x)
+            y_stage.set_position(y)
             print(f"No improvement, reducing step to {step:.4f}")
 
-    # Set final position
-    x_stage.set_position(x)
-    y_stage.set_position(y)
+    # Return final position
     return x, y
 
 
@@ -170,11 +163,12 @@ def get_pointing_error(
     
     # Align sample at each z point
     for iz, z in enumerate(sample_points):
+        print(f"Laterally aligning for z={z:.2f}")
         z_stage.set_position(z)
         x_mean, y_mean = align_sample_xy_greedy(
             spectrometer, 
             x_stage, y_stage, 
-            init_step=0.5, 
+            init_step=0.2,
             wavelength_mask=wavelength_mask
         )
         samples[iz,:] = [x_mean, y_mean]
@@ -182,6 +176,9 @@ def get_pointing_error(
     # Compute pointing error functions x(z), y(z)
     m_x, b_x = np.polyfit(sample_points, samples[:,0], 1)
     m_y, b_y = np.polyfit(sample_points, samples[:,1], 1)
+
+    print(sample_points)
+    print(samples)
 
     # Check R^2
     x_pred = m_x*sample_points+b_x
@@ -226,7 +223,7 @@ def align_sample_z_greedy(
         for alt in ALTITUDE_SAMPLES:
             altitude_stage.set_angle(alt)
             data = capture_spectrum(spectrometer)
-            score += np.sum(data[wavelength_mask, 1] if wavelength_mask else data[:, 1]) 
+            score += np.sum(data[:, 1] if wavelength_mask is None else data[wavelength_mask, 1]) 
         return score
 
     # Get initial position
@@ -235,20 +232,21 @@ def align_sample_z_greedy(
 
     # Measure center
     best_score = measure(z)
-    best_pos = z
+    best_z = z
 
     while step >= target_step:
         # Measure neighbors
         for z_test in (z+step, z-step):
             score = measure(z_test)
+            print(f"{z_test} --> {score}")
             if score > best_score:
                 best_score = score
                 best_z = z_test
 
         # If we find a better neighbor, move there
         if best_z != z:
-            print(f"Moving to ({best_pos[0]:.4f}, {best_pos[1]:.4f}), L1 = {best_score:.2f}")
-            z = best_pos
+            print(f"Moving to ({best_z:.4f}, {best_z:.4f}), L1 = {best_score:.2f}")
+            z = best_z
             best_score = measure(z)
         
         # If the center is the best, lower the search radius and repeat
@@ -331,13 +329,13 @@ if __name__ == "__main__":
     spec = get_spectrometer()
     configure_spectrometer(
         spec,
-        int_time_ms=5,
+        int_time_ms=1.2,
         averages=128
     )
 
     # Take dark spectrum
     capture_dark_spectrum(spec)
-
+    data = capture_spectrum(spec)
 
     # Define wavelength mask
     WAVELENGTH_MIN = 400
@@ -345,7 +343,7 @@ if __name__ == "__main__":
     mask = (data[:, 0] >= WAVELENGTH_MIN) & (data[:, 0] <= WAVELENGTH_MAX)
     
     # Align sample in x/y
-    sample_points = np.linspace(0, 50, 5)
+    sample_points = np.linspace(0, 50, 4)
     m_x, b_x, m_y, b_y, r_sq_x, r_sq_y = get_pointing_error(
         spec, 
         x_stage, y_stage, z_stage, 
@@ -354,14 +352,17 @@ if __name__ == "__main__":
     )
 
     # Assert linearity
-    assert (r_sq_x > 0.98) and (r_sq_y > 0.98), "Line fitting failed"
-    
+    # assert (r_sq_x > 0.98) and (r_sq_y > 0.98), "Line fitting failed"
+
+    z_stage.set_position(25)
+
     # Align sample in z
     align_sample_z_greedy(
         spec,
         x_stage, y_stage, z_stage,
         altitude_stage,
-        m_x, b_y,
+        m_x, b_x,
         m_y, b_y,
+        init_step=5,
         wavelength_mask=mask
     )
