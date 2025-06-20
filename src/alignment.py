@@ -89,7 +89,7 @@ def align_sample_gradient_ascent(
         spectrometer,
         x_stage, y_stage,
         init_step=1,
-        min_step=0.001
+        target_step=0.001
     ):
     """Align LED to fiber by hill climbing with adaptive step size"""
 
@@ -97,35 +97,40 @@ def align_sample_gradient_ascent(
         x_stage.set_position(x)
         y_stage.set_position(y)
         data = capture_spectrum(spectrometer)
-        return np.sum(np.abs(data[:, 1]))
+        return np.sum(data[:, 1])
 
     # Initial position
     x = x_stage.get_position()
     y = y_stage.get_position()
     step = init_step
 
-    while step >= min_step:
+    while step >= target_step:
         # 8 surrounding positions
         directions = [
-            (0, step),     # N
-            (step, step),  # NE
-            (step, 0),     # E
-            (step, -step), # SE
-            (0, -step),    # S
-            (-step, -step),# SW
-            (-step, 0),    # W
-            (-step, step)  # NW
+            (0,      step), # N
+            (step,   step), # NE
+            (step,   0),    # E
+            (step,  -step), # SE
+            (0,     -step), # S
+            (-step, -step), # SW
+            (-step,  0),    # W
+            (-step,  step)  #  NW
         ]
 
         # Measure center
-        best_score = measure(x, y)
+        readings = [measure(x, y) for _ in range(10)]
+        std_dev = np.std(readings)
+        best_score = np.mean(readings)
         best_pos = (x, y)
+
+        print(f"[({x:.3f}, {y:.3f}) --> {best_score:.2f}")
 
         # Measure neighbors
         for dx, dy in directions:
             x_new, y_new = x + dx, y + dy
             score = measure(x_new, y_new)
-            if score > best_score:
+            print(f"[({x_new:.3f}, {y_new:.3f}) --> {score:.2f}")
+            if score > best_score + 1.5*std_dev:
                 best_score = score
                 best_pos = (x_new, y_new)
 
@@ -290,11 +295,11 @@ if __name__ == "__main__":
     z_stage = ZaberLinearStage(ZABER_Z_SERIAL_NUM, conn)
 
     # Home stages
-    azimuth_stage.home()
-    altitude_stage.home()
-    x_stage.home()
-    y_stage.home()
-    z_stage.home()
+    # azimuth_stage.home()
+    # altitude_stage.home()
+    # x_stage.home()
+    # y_stage.home()
+    # z_stage.home()
 
     # Configure rotary stages
     azimuth_stage.configure(
