@@ -11,14 +11,14 @@ from alignment import *
 
 # === Angular sweep parameters ===
 # -90 is arm horizontal left. +90 is arm horizontal right
-ALTITUDE_START = -80 # Starting angle (degrees) of sweep.
+ALTITUDE_START = 0 # Starting angle (degrees) of sweep.
 ALTITUDE_END = 80 # Final angle (degrees) of sweep
 ALTITUDE_STEP = 1 # Degrees between each measurement
 SETTLE_TIME = 0.5 # Time (in seconds) to wait before collecting measurements after moving motor
 
 # === Spectrometer parameters ===
-INTEGRATION_TIME = 1.2 # Integration time (milliseconds)
-AVERAGING_POINTS = 100 # Number of readings to collect at each angle
+INTEGRATION_TIME = 30 # Integration time (milliseconds)
+AVERAGING_POINTS = 16 # Number of readings to collect at each angle
 BOXCAR_WIDTH = 10 # Moving average filter width. 1 = No smoothing
 
 
@@ -81,10 +81,6 @@ z_stage.configure(
     max_accel = 10,
 )
 
-# Set azimuth position
-azimuth_stage.set_angle(0)
-
-
 # === Initialize spectrometer ===
 spec = get_spectrometer()
 configure_spectrometer(
@@ -99,6 +95,11 @@ capture_dark_spectrum(spec)
 # Get spectrometer wavelengths
 data = capture_spectrum(spec)
 wavelengths = data[:,0]
+
+# Define wavelength mask
+WAVELENGTH_MIN = 400
+WAVELENGTH_MAX = 500
+wavelength_mask = (data[:, 0] >= WAVELENGTH_MIN) & (data[:, 0] <= WAVELENGTH_MAX)
 
 
 # === Initialize Outputs ===
@@ -142,6 +143,19 @@ plt.ion()
 #     5
 # )
 
+# Set fixed stage positions
+azimuth_stage.set_angle(0)
+z_stage.set_position(35.0)
+
+
+# Initial xy alignment
+altitude_stage.set_angle(0)
+x_mean, y_mean = align_sample_xy_greedy(
+    spec, 
+    x_stage, y_stage, 
+    wavelength_mask=wavelength_mask
+)
+
 
 # === Sweep Altitude ===
 for alt in altitude_angles:
@@ -150,7 +164,20 @@ for alt in altitude_angles:
     altitude_stage.set_angle(float(alt))
 
     # Motion settling time
-    time.sleep(SETTLE_TIME)
+    # time.sleep(SETTLE_TIME)
+    configure_spectrometer(spec, averages=16)
+
+    # x = input("Manual adjust")
+
+    # Laterally re-align sample
+    x_mean, y_mean = align_sample_xy_greedy(
+        spec, 
+        x_stage, y_stage, 
+        init_step=0.2,
+        wavelength_mask=wavelength_mask
+    )
+
+    configure_spectrometer(spec, averages=100)
 
     # Take new readings
     reading = capture_spectrum(spec)[:,1]
